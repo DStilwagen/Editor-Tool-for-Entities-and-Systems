@@ -1,4 +1,3 @@
-
 # Entity Component System Tools
 
 A set of tools to be used with Unity's Entity Component System (ECS). Currently there is only one editor window with two pages, one for systems and one for entities. In the near future they will be moved into their own editor windows.
