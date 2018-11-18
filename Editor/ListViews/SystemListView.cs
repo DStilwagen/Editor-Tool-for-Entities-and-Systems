@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using ECSTools.ListViews.Data;
 using Unity.Entities;
+using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -12,6 +14,7 @@ namespace ECSTools.ListViews
     {
         //TODO Fix timing
         //Recorder taken from Unity's Entity Debugger window to offer the same information but it does not work correctly.
+        private readonly Dictionary<ScriptBehaviourManager, AverageRecorder> recordersByManager = new Dictionary<ScriptBehaviourManager, AverageRecorder>();
         private class AverageRecorder
         {
             private readonly Recorder recorder;
@@ -56,53 +59,52 @@ namespace ECSTools.ListViews
             recorder.enabled = true;
         }
 
-        private readonly Dictionary<ScriptBehaviourManager, AverageRecorder> recordersByManager = new Dictionary<ScriptBehaviourManager, AverageRecorder>();
         private readonly World world;
-        private List<Type> inactiveSystems;
         private int lastTimedFrame;
-        private int id;
 
-        public SystemListView(TreeViewState state, MultiColumnHeader multiColumnHeader, World world, List<Type> allSystems) :
+        public SystemListView(TreeViewState state, MultiColumnHeader multiColumnHeader, World world) :
             base(state, multiColumnHeader)
         {
-            this.world = world;
+            this.world               = world;
             multiColumnHeader.height = 20f;
-            inactiveSystems = new List<Type>(allSystems);
         }
+
         protected override TreeViewItem BuildRoot()
         {
             LastPlayerLoop = ScriptBehaviourUpdateOrder.CurrentPlayerLoop;
 
             var root = new TreeViewItem(-1, -1, "Root");
             id = 0;
+
             foreach (var manager in world.BehaviourManagers)
             {
-                root.AddChild(new SystemElement(true, world, manager, id: id++, depth: 0));
+                root.AddChild(new SystemElement(world, manager, id++, 0));
                 //CreateSystemRecorder(manager);
-                if(inactiveSystems != null)
-                    inactiveSystems.Remove(manager.GetType());
-            }
-            foreach (var inactiveSystem in inactiveSystems)
-            {
-                root.AddChild(new SystemElement(false, world, type: inactiveSystem, id: id++, depth: 0));
             }
             SetupDepthsFromParentsAndChildren(root);
             return root;
         }
+
         protected override void RowGUI(RowGUIArgs args)
         {
             //If this row contains data for a System render it below.
-            if (args.item is SystemElement)
+            if (args.item is SystemElement sys)
             {
-                var sys = args.item as SystemElement;
-                
-                GUI.Label(args.GetCellRect(0), sys.displayName);
+                int column = 0;
+                if(sys.Enabled)
+                    sys.Enabled = GUI.Toggle(args.GetCellRect(column++), sys.Enabled, GUIContent.none);
+                else
+                {
+                    column++;
+                }
+                    GUI.Label(args.GetCellRect(column++), sys.displayName);
+                //sys.Enabled = EditorGUI.Toggle(args.GetCellRect(column++), sys.Enabled);
 
                 //Disabled because it does not update properly.
                 //Timings don't update as quickly as in the Entity Debugger window.
                 //if (sys.Manager is ComponentSystemBase compBase)
                 //{
-                //    var timingRect = args.GetCellRect(1);
+                //    var timingRect = args.GetCellRect(column++);
                 //    if (compBase.ShouldRunSystem())
                 //    {
                 //        var recorder = recordersByManager[sys.Manager];
@@ -116,29 +118,11 @@ namespace ECSTools.ListViews
                 //    }
                 //}
 
-                //If the system exists enable update and dispose. If it doesn't exists disable update and dispose and enable create
-                if (sys.Exists)
-                {
-                    if (GUI.Button(args.GetCellRect(2), "Update"))
-                        sys.Update();
-                    if (GUI.Button(args.GetCellRect(3), "Dispose"))
-                        sys.Dispose();
-                    GUI.enabled = false;
-                    if (GUI.Button(args.GetCellRect(1), "Create"))
-                        sys.Create();
-                    GUI.enabled = true;
-                }
-                else
-                {
-                    if (GUI.Button(args.GetCellRect(1), "Create"))
-                        sys.Create();
-                    GUI.enabled = false;
-                    if (GUI.Button(args.GetCellRect(2), "Update"))
-                        sys.Update();
-                    if (GUI.Button(args.GetCellRect(3), "Dispose"))
-                        sys.Dispose();
-                    GUI.enabled = true;
-                }
+                //If the system exists enable update and dispose.
+                if (GUI.Button(args.GetCellRect(column++), "Update"))
+                    sys.Update();
+                if (GUI.Button(args.GetCellRect(column++), "Dispose"))
+                    sys.Dispose();
             }
         }
     }

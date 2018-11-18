@@ -5,6 +5,7 @@ using System.Reflection;
 using ECSTools.ListViews;
 using ECSTools.ListViews.Data;
 using ECSTools.ListViews.StructDrawer;
+using ECS_Test_Scripts;
 using Unity.Entities;
 using Unity.Entities.Editor;
 using UnityEditor;
@@ -24,33 +25,35 @@ namespace ECSTools
             var window = GetWindow<ECSTools>();
             window.titleContent = new GUIContent("System & Entity Tools");
             window.Focus();
-            window.minSize = new Vector2(650, 310);
+            window.minSize = new Vector2(650, 400);
             window.Repaint();
             return window;
 
         }
 
-        [NonSerialized] private bool initialized;
-        [SerializeField] private TreeViewState worldTreeViewState;
+        [NonSerialized]  private bool                   initialized;
+        [SerializeField] private TreeViewState          worldTreeViewState;
         [SerializeField] private MultiColumnHeaderState worldMultiColumnHeaderState;
-        private WorldListView worldListView;
-        private SearchField systemSearchField;
-        
-        private SystemListView test;
+        private                  WorldListView          worldListView;
+        private                  SearchField            worldSystemSearchField;
 
-        [SerializeField] private TreeViewState      entityTreeViewState;
+        [SerializeField] private TreeViewState          systemCreateTreeViewState;
+        [SerializeField] private MultiColumnHeaderState systemCreateMultiColumnHeaderState;
+        private                  SystemCreateListView   systemCreateListView;
+
+        [SerializeField] private TreeViewState          entityTreeViewState;
         [SerializeField] private MultiColumnHeaderState entityListMultiColumnHeaderState;
-        private EntityListView     entityList;
-        
-        [SerializeField] private TreeViewState      componentTypesTreeViewState;
+        private                  EntityListView         entityList;
+
+        [SerializeField] private TreeViewState          componentTypesTreeViewState;
         [SerializeField] private MultiColumnHeaderState componentTypeListMultiColumnHeaderState;
-        private ComponentTypeListView componentTypeList;
-        
-        private List<Type> allSystems = new List<Type>();
-        private float lastUpdate;
-        private Vector2 scrollPosition = Vector2.zero;
+        private                  ComponentTypeListView  componentTypeList;
+
+        private List<Type>           allSystems = new List<Type>();
+        private float                lastUpdate;
+        private Vector2              scrollPosition = Vector2.zero;
         private EntitySelectionProxy selectionEntityProxy;
-        
+
         // Currently in development as a possible way to display editors for components see Note 6 from the README.md
         //private ObjectSelectionProxy selectionObjectProxy;
 
@@ -63,7 +66,7 @@ namespace ECSTools
                     worldTreeViewState = new TreeViewState();
 
                 var firstInit   = worldMultiColumnHeaderState == null;
-                var headerState = WorldListView.CreateDefaultMultiColumnHeaderState();
+                var headerState = WorldListView.BuildWorldMultiColumnHeaderState();
                 if (MultiColumnHeaderState.CanOverwriteSerializedFields(worldMultiColumnHeaderState, headerState))
                     MultiColumnHeaderState.OverwriteSerializedFields(worldMultiColumnHeaderState, headerState);
                 worldMultiColumnHeaderState = headerState;
@@ -72,27 +75,35 @@ namespace ECSTools
                 if (firstInit)
                     multiColumnHeader.ResizeToFit();
 
-                worldListView = new WorldListView(worldTreeViewState, multiColumnHeader, allSystems);
+                worldListView = new WorldListView(worldTreeViewState, multiColumnHeader);
                 worldListView.UpdateIfNecessary();
 
                 //Not yet full implemented
-                //systemSearchField                         =  new SearchField();
-                //systemSearchField.downOrUpArrowKeyPressed += worldListView.SetFocusAndEnsureSelectedItem;
+                //worldSystemSearchField                         =  new SearchField();
+                //worldSystemSearchField.downOrUpArrowKeyPressed += worldListView.SetFocusAndEnsureSelectedItem;
+
+                if (systemCreateTreeViewState == null)
+                    systemCreateTreeViewState = new TreeViewState();
+
+                systemCreateListView = SystemCreateListView.CreateListView(systemCreateMultiColumnHeaderState,
+                                                                           systemCreateTreeViewState,
+                                                                           allSystems);
 
                 if (componentTypesTreeViewState == null)
                     componentTypesTreeViewState = new TreeViewState();
 
                 componentTypeList =
-                    new ComponentTypeListView(componentTypesTreeViewState, out componentTypeListMultiColumnHeaderState, ObjectSelectionChanged, () => World);
+                    new ComponentTypeListView(componentTypesTreeViewState, out componentTypeListMultiColumnHeaderState,
+                                              ObjectSelectionChanged, () => World);
                 componentTypeList.UpdateIfNecessary();
 
 
                 if (entityTreeViewState == null)
                     entityTreeViewState = new TreeViewState();
 
-                entityList = new EntityListView(entityTreeViewState, out entityListMultiColumnHeaderState, World, EntitySelectionChanged);
+                entityList = new EntityListView(entityTreeViewState, out entityListMultiColumnHeaderState, World,
+                                                EntitySelectionChanged);
                 entityList.UpdateIfNecessary();
-
 
                 initialized = true;
             }
@@ -119,7 +130,7 @@ namespace ECSTools
                 catch (ReflectionTypeLoadException e)
                 {
                     allTypes = e.Types.Where(t => t != null);
-                    Debug.LogWarning("DefaultWorldInitialization failed loading assembly: " + ass.Location);
+                    Debug.LogWarning("ECSTools failed in loading assembly: " + ass.Location);
                 }
 
                 var systemTypes = allTypes.Where(t =>
@@ -143,6 +154,7 @@ namespace ECSTools
                 DestroyImmediate(selectionEntityProxy);
             //EntityList.selectionChanged -= EntitySelectionChanged;
         }
+
         void EntitySelectionChanged(Entity entity, World world, ComponentType type)
         {
             if (type.GetManagedType() == typeof(Entity))
@@ -166,11 +178,12 @@ namespace ECSTools
         }
 
         //Temporarily used for holding reference to selected components object and ComponentType. See the comment at the selectionObjectProxy declaration on line 53 for why this exists.
-        private object selectedComponentTypeObject;
+        private object        selectedComponentTypeObject;
         private ComponentType selectedComponentType;
+
         void ObjectSelectionChanged(ComponentType type, ref object objs)
         {
-            selectedComponentType = type;
+            selectedComponentType       = type;
             selectedComponentTypeObject = objs;
             ////Not yet full implemented. See the comment at the selectionObjectProxy declaration on line 53
             //if (objs != null)
@@ -219,26 +232,39 @@ namespace ECSTools
         //Selected Page (Current Pages: Systems, and Entities)
         private int page;
         //Get Selected World
-        public World World => World.AllWorlds[world];
-        void OnGUI ()
+        public  World World => World.AllWorlds[world];
+        private int   t = 0;
+
+        void OnGUI()
         {
             //For use in setting position values like height and width
             //PositioningWindow.Update = this;
-            if(World.AllWorlds.Count <= 0)
+            if (World.AllWorlds.Count <= 0)
             {
                 GUILayout.Label("No Worlds press Play or have at least 1 GameObjectEntity in the scene");
                 return;
             }
+
             InitIfNeeded();
             worldListView.UpdateIfNecessary();
             componentTypeList.UpdateIfNecessary();
             entityList.UpdateIfNecessary();
+            systemCreateListView.UpdateIfNecessary();
 
+            //if (GUILayout.Button("Test Button"))
+            //{
+            //    Debug.Log(World.Active);
+            //    World.Active.CreateManager<TestSystem>();
+            //    ScriptBehaviourUpdateOrder.UpdatePlayerLoop(World.Active);
+            //}
+            
             page = GUILayout.Toolbar(page, new[ ] { "Systems", "Entities" }, GUILayout.Width(300));
-                BuildWindow();
-
+            
+            BuildWindow();
+            
             lastUpdate = Time.realtimeSinceStartup;
         }
+
         void BuildWindow()
         {
             switch (page)
@@ -271,22 +297,25 @@ namespace ECSTools
         }
 
         private static GUIStyle box;
-        
+
         void EntitiesView()
-        {   
+        {
             world = EditorGUILayout.Popup(world, World.AllWorlds.Select(w => w.Name).ToArray(), GUILayout.Width(250));
+            
+            verticalSplitViewComponentEditorArea.BeginSplitView();
+            horizontalSplitViewComponentEntitySplit.BeginSplitView();
 
-            EditorGUILayout.BeginHorizontal(GUILayout.MinHeight(position.height / 2));
+            componentTypeList.OnGUI(GUIHelpers.GetExpandingRect());
+      
+            horizontalSplitViewComponentEntitySplit.Split();
+
+            entityList.OnGUI(GUIHelpers.GetExpandingRect());
             
-            var entityTypeListRect = GUIHelpers.GetExpandingRect();
-            componentTypeList.OnGUI(entityTypeListRect);
+            horizontalSplitViewComponentEntitySplit.EndSplitView();
+            verticalSplitViewComponentEditorArea.Split();
             
-            var entityListRect = GUIHelpers.GetExpandingRect();
-            entityList.OnGUI(entityListRect);
-            EditorGUILayout.EndHorizontal();
-            //EditorGUILayout.BeginVertical(GUILayout.MinHeight(minSize.y * .25f));
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, Box);
-
+            
             //Not yet full implemented See the comment at the selectionObjectProxy declaration on line 53
             //var obj = selectionObjectProxy.Object;
             var obj = selectedComponentTypeObject;
@@ -294,7 +323,6 @@ namespace ECSTools
                 foreach (var field in obj.GetType().GetFields())
                     StructDrawer.GetType(field, ref obj, field.GetValue(obj), World);
             GUILayout.EndScrollView();
-            //EditorGUILayout.EndVertical();
             if (Selection.activeObject is EntitySelectionProxy proxy)
                 selectionEntityProxy = proxy;
             GUILayout.BeginHorizontal();
@@ -315,7 +343,7 @@ namespace ECSTools
                 //em.AddComponents(selectionEntityProxy.Entity, comptypes);
                 if (objectList[0] is ComponentElement element)
                 {
-                    if(!em.HasComponent(selectionEntityProxy.Entity, element.Type))
+                    if (!em.HasComponent(selectionEntityProxy.Entity, element.Type))
                     {
                         em.AddComponent(selectionEntityProxy.Entity, element.Type);
                         em.SetComponentWithType(selectionEntityProxy.Entity, element.Type, obj);
@@ -324,36 +352,36 @@ namespace ECSTools
             }
             if (GUILayout.Button("Set Component"))
             {
-                EntityManager em = World.Active.GetExistingManager<EntityManager>();
-                var selection = entityList.GetSelection();
-                var objectList = entityList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
+                EntityManager em         = World.Active.GetExistingManager<EntityManager>();
+                var           selection  = entityList.GetSelection();
+                var           objectList = entityList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
 
                 if (objectList[0] is EntityElement entityElementSelected)
-                    if(!em.HasComponent(selectionEntityProxy.Entity, selectedComponentType))
+                    if (!em.HasComponent(selectionEntityProxy.Entity, selectedComponentType))
                         em.SetComponentWithType(entityElementSelected.Entity, selectedComponentType, obj);
                     //See the comments for selectedComponentType an ObjectSelectionChanged function
                     //if(!em.HasComponent(selectionEntityProxy.Entity, selectionObjectProxy.ComponentType))
                     //    em.SetComponentWithType(entityElementSelected.Entity, selectionObjectProxy.ComponentType, obj);
 
-                else if (objectList[0] is ComponentElement element)
-                    if (element.parent is EntityElement entityElement)
-                        if(!em.HasComponent(selectionEntityProxy.Entity, element.Type))
-                        em.SetComponentWithType(entityElement.Entity, element.Type, obj);
+                    else if (objectList[0] is ComponentElement element)
+                        if (element.parent is EntityElement entityElement)
+                            if (!em.HasComponent(selectionEntityProxy.Entity, element.Type))
+                                em.SetComponentWithType(entityElement.Entity, element.Type, obj);
             }
             if (GUILayout.Button("Remove Component"))
             {
                 EntityManager em        = World.Active.GetExistingManager<EntityManager>();
                 var           selection = componentTypeList.GetSelection();
                 var           typeList  = componentTypeList.GetRows().Where(a => selection.Contains(a.id));
-                
+
                 foreach (var type in typeList)
-                    if(type is ComponentElement entityType)
+                    if (type is ComponentElement entityType)
                         if (!em.HasComponent(selectionEntityProxy.Entity, entityType.Type))
                             em.RemoveComponent(selectionEntityProxy.Entity, entityType.Type);
             }
             if (GUILayout.Button("Destroy Entity"))
             {
-                if(selectionEntityProxy.Exists)
+                if (selectionEntityProxy.Exists)
                 {
                     var entityManager = World.GetExistingManager<EntityManager>();
                     entityManager.DestroyEntity(selectionEntityProxy.Entity);
@@ -367,25 +395,47 @@ namespace ECSTools
 
                 var entity = em.CreateEntity();
                 foreach (var type in typeList)
-                    if(type is ComponentElement entityType)
+                    if (type is ComponentElement entityType)
                         if (!em.HasComponent(entity, entityType.Type))
                             em.SetComponentWithType(entity, entityType.Type, obj);
 
             }
             GUILayout.EndHorizontal();
+            verticalSplitViewComponentEditorArea.EndSplitView();
         }
 
-        private static bool updatePlayerLoopChoice;
-        public static bool UpdatePlayerLoopChoice => updatePlayerLoopChoice;
+        [SerializeField] private static bool updatePlayerLoopChoice = true;
+        public static                   bool UpdatePlayerLoopChoice => updatePlayerLoopChoice;
+        
+        [SerializeField] private static bool forceUpdateChoice = false;
+        public static                   bool ForceUpdateChoice => forceUpdateChoice;
+
         void SystemsTreeView()
         {
+            
+            verticalSplitViewSystemsPage.BeginSplitView();
             //if (GUILayout.Button("Update Player Loop", GUILayout.Width(200)))
             //    ScriptBehaviourUpdateOrder.UpdatePlayerLoop(World.AllWorlds.ToArray());
-            updatePlayerLoopChoice = EditorGUILayout.ToggleLeft(new GUIContent("Update Player Loop",
-                                                      "Update the player loop when a system is created"), updatePlayerLoopChoice);
+            updatePlayerLoopChoice = EditorGUILayout.ToggleLeft(new GUIContent("Update Player Loop When a System is Created",
+                                                                               "Update the player loop when a system is created"),
+                                                                updatePlayerLoopChoice);
             
+            //var rect = EditorGUILayout.BeginVertical();
+            systemCreateListView.OnGUI(GUIHelpers.GetExpandingRect());
+
+            verticalSplitViewSystemsPage.Split();
+            
+            forceUpdateChoice =
+                EditorGUILayout
+                    .ToggleLeft(new GUIContent("Force a System to Update When Disabled", "If a system is disabled it will be turned on then update is called forcing the system to run"),
+                            forceUpdateChoice);
             worldListView.OnGUI(GUIHelpers.GetExpandingRect());
+            //EditorGUILayout.EndVertical();
+            verticalSplitViewSystemsPage.EndSplitView();
         }
-        //void SearchBar (Rect rect) => WorldSystemTreeView.searchString = systemSearchField.OnGUI (rect, WorldSystemTreeView.searchString);
+        
+        EditorGUISplitView verticalSplitViewSystemsPage = new EditorGUISplitView (EditorGUISplitView.Direction.Vertical);
+        EditorGUISplitView verticalSplitViewComponentEditorArea = new EditorGUISplitView (EditorGUISplitView.Direction.Vertical);
+        EditorGUISplitView horizontalSplitViewComponentEntitySplit = new EditorGUISplitView (EditorGUISplitView.Direction.Horizontal);
     }
 }

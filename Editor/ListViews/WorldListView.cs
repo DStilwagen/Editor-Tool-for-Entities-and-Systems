@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using ECSTools.ListViews.Data;
 using Unity.Entities;
+using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
@@ -9,45 +11,44 @@ namespace ECSTools.ListViews
 {
     public class WorldListView : BaseListView
     {
-        public WorldListView(TreeViewState state, MultiColumnHeader multiColumnHeader, List<Type> allSystems) : base(state, multiColumnHeader)
+        public WorldListView(TreeViewState state, MultiColumnHeader multiColumnHeader) : base(state, multiColumnHeader)
         {
             columnIndexForTreeFoldouts = 1;
-            this.allSystems = allSystems;
+            multiColumnHeader.height = 20f;
+            getNewSelectionOverride = (item, selection, shift) => new List<int>();
         }
 
-        private int currentId;
-        private List<SystemListViewItem> systems = new List<SystemListViewItem>();
-        private List<WorldElement> worlds = new List<WorldElement>();
-        private List<Type> allSystems;
+        private Dictionary<WorldElement, SystemListViewElement> systemListByWorld =
+            new Dictionary<WorldElement, SystemListViewElement>();
         protected override TreeViewItem BuildRoot()
         {
-            systems.Clear();
-            worlds.Clear();
+            systemListByWorld.Clear();
 
             LastPlayerLoop = ScriptBehaviourUpdateOrder.CurrentPlayerLoop;
 
             var root = new TreeViewItem(-1, -1, "Root");
 
             var expandedIDs = new List<int>();
-            foreach (var child in World.AllWorlds)
+
+            foreach (var world in World.AllWorlds)
             {
-                var world = new WorldElement(currentId++, child);
+                var worldElement = new WorldElement(id++, world);
                 
-                worlds.Add(world);
-                expandedIDs.Add(world.id);
+                expandedIDs.Add(worldElement.id);
                 
-                var systemList = new SystemListViewItem(currentId++, 1, child, allSystems);
-                systems.Add(systemList);
-                
-                world.AddChild(systemList);
-                if (world.hasChildren)
-                    root.AddChild(world);
+                var systemList = new SystemListViewElement(id++, 1, world);
+                systemListByWorld.Add(worldElement, systemList);
+
+                worldElement.AddChild(systemList);
+                if (worldElement.hasChildren)
+                    root.AddChild(worldElement);
             }
+
             state.expandedIDs = expandedIDs;
             SetupDepthsFromParentsAndChildren(root);
             return root;
         }
-        public static MultiColumnHeaderState CreateDefaultMultiColumnHeaderState()
+        public static MultiColumnHeaderState BuildWorldMultiColumnHeaderState()
         {
             var columns = new[ ]
                           {
@@ -84,16 +85,14 @@ namespace ECSTools.ListViews
         }
         protected override float GetCustomRowHeight(int row, TreeViewItem item)
         {
-            if (item is SystemListViewItem)
-                return ((SystemListViewItem) item).SystemListView.totalHeight;
+            if (item is SystemListViewElement)
+                return ((SystemListViewElement) item).SystemListView.totalHeight;
             return base.GetCustomRowHeight(row, item);
         }
 
         protected override void RowGUI (RowGUIArgs args)
         {
-            var item = args.item is SystemListViewItem header ? header : null;
-
-            if (item != null)
+            if (args.item is SystemListViewElement item)
             {
                 var rect = args.GetCellRect(1);
                 rect.xMin += GetContentIndent(args.item);
@@ -101,9 +100,38 @@ namespace ECSTools.ListViews
                 item.SystemListView.OnGUI(rect);
                 return;
             }
+            if (args.item is WorldElement world)
+            {
+                var rect = args.GetCellRect(1);
+                rect.xMin += GetContentIndent(args.item);
+                GUILayout.BeginArea(rect);
+                EditorGUILayout.BeginHorizontal();
 
-            args.rowRect = args.GetCellRect(1);
-            base.RowGUI(args);
+                GUILayout.Label(world.World.Name);
+                if (GUILayout.Button(new GUIContent("Update All",
+                                                    $"Updates all the systems for {world.World.Name} in the order they appear,"), GUILayout.Height(rowHeight - 3)))
+                    world.UpdateAll();
+                if (GUILayout.Button(new GUIContent("Update Selected",
+                                                    $"Updates selected systems for {world.World.Name} in the order they appear,"),
+                                     GUILayout.Height(rowHeight - 3)))
+                {
+                    foreach (var systems in systemListByWorld[world].SystemListView.GetRows().Where(a => systemListByWorld[world].SystemListView.GetSelection().Contains(a.id)).ToArray())
+                    {
+                        ((SystemElement) systems).Update();
+
+                    }
+                }
+                if (GUILayout.Button(new GUIContent("Update PlayerLoop",
+                                                    $"Update the PlayerLoop for {world.World.Name}"), GUILayout.Height(rowHeight - 3)))
+                    world.UpdatePlayerLoop();
+                if (GUILayout.Button(new GUIContent("Dispose", $"Dispose of {world.World.Name}"), GUILayout.Height(rowHeight - 3)))
+                    world.Dispose();
+
+                EditorGUILayout.EndHorizontal();
+                GUILayout.EndArea();
+                return;
+                
+            }
         }
     }
 }

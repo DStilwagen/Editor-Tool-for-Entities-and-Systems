@@ -1,50 +1,41 @@
-﻿using System;
-using ECSTools.ListViews.Data.Base;
-using Unity.Entities;
+﻿using Unity.Entities;
+using UnityEditor.IMGUI.Controls;
 
 namespace ECSTools.ListViews.Data
 {
-    public class SystemElement : BaseSystemElement
+    public class SystemElement : TreeViewItem
     {
+        private ComponentSystemBase Manager;
         private World world;
-        private Type type;
-        private ScriptBehaviourManager  Manager;
-        private static Type GetName(ScriptBehaviourManager manager = null, Type type = null)
+        public SystemElement(World world, ScriptBehaviourManager manager, int id = 0, int depth = 1) : base(id, depth, manager.GetType().Name)
         {
-            if (manager == null && type == null)
-                throw new ArgumentException("Can't Have Both Manager and Type Equal Null");
-            return type ?? manager.GetType();
+            Manager = manager as ComponentSystemBase;
+            this.world = world;
+        }
+        public bool Enabled
+        {
+            get => Manager?.Enabled ?? false;
+            set {
+                if(Manager == null)
+                    return;
+                Manager.Enabled = value;
+            }
+        }
+        public void Update()
+        {
+            if (Manager.Enabled)
+                Manager.Update();
+            else if(ECSTools.ForceUpdateChoice)
+            {
+                Manager.Enabled = true;
+                Manager.Update();
+                Manager.Enabled = false;
+            }
         }
 
-        public SystemElement(bool exists, World world, ScriptBehaviourManager manager = null, Type type = null, int id = 0, int depth = 1) : base(id, depth, GetName(manager, type).Name)
+        public void Dispose()
         {
-            if (manager == null && type == null)
-                throw new ArgumentException("Can't Have Both Manager and Type Equal Null");
-            Exists  = exists;
-            Manager = manager;
-            this.world   = world ?? World.Active;
-            this.type    = type ?? Manager.GetType();
-        }
-        public override void Create()
-        {
-            Manager = world.CreateManager(type);
-            Exists = true;
-
-            //Updates the playerloop for this systems world only,
-            //switch which line is commented to update all worlds loops on creation
-            if (ECSTools.UpdatePlayerLoopChoice)
-                ScriptBehaviourUpdateOrder.UpdatePlayerLoop(world);
-                //ScriptBehaviourUpdateOrder.UpdatePlayerLoop(World.AllWorlds.ToArray());
-        }
-        public override void Update() { Manager.Update(); }
-
-        public override void Dispose()
-        {
-            if (!Exists)
-                return;
             world.DestroyManager(Manager);
-            Exists = false;
-
             //Always updates for this systems world only
             //switch which line is commented to update all worlds loops on dispose
             ScriptBehaviourUpdateOrder.UpdatePlayerLoop(world);
