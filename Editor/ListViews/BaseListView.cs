@@ -6,6 +6,7 @@ namespace ECSTools.ListViews
 {
     public abstract class BaseListView : TreeView
     {
+        protected int id;
         protected BaseListView(TreeViewState state) : base(state) { }
         protected BaseListView(TreeViewState state, MultiColumnHeader multiColumnHeader) : base(state, multiColumnHeader) { }
         

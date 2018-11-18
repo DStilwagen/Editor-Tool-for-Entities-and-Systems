@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -22,15 +23,10 @@ namespace ECSTools.ListViews.StructDrawer
         public static void GetType(FieldInfo field, ref object parent, object value, World world)
         {
             entityManager = world.GetExistingManager<EntityManager>();
-            name = field.FieldType.Name + " : " + field.Name;
-
+            
             var wideMode = EditorGUIUtility.wideMode;
             EditorGUIUtility.wideMode = true;
-
-            if (field.FieldType.IsPrimitive)
-                HandlePrimitives(field, ref parent, value);
-            else
-                CheckType(field, ref parent, value);
+            CheckType(field, ref parent, value);
             EditorGUIUtility.wideMode = wideMode;
         }
 
@@ -69,6 +65,18 @@ namespace ECSTools.ListViews.StructDrawer
         }
         private static void CheckType(FieldInfo field, ref object parent, object value)
         {
+            name = field.Name;
+            //Change this to show type and field name.
+            //name = field.FieldType.Name + " : " + field.Name;
+
+            if (field.FieldType.IsPrimitive)
+            {
+                HandlePrimitives(field, ref parent, value);
+                return;
+            }
+            if(HandleIntFloat(field, ref parent, value))
+                return;
+
             switch (value)
             {
                 case Entity entity:
@@ -79,7 +87,29 @@ namespace ECSTools.ListViews.StructDrawer
                     CustomVisit(ref q);
                     field.SetValue(parent, q);
                     break;
+                case Enum e:
+                    CustomVisit(ref e);
+                    field.SetValue(parent, e);
+                    break;
+                case Mesh mesh:
+                    CustomVisit(ref mesh);
+                    field.SetValue(parent, mesh);
+                    break;
+                case Material mat:
+                    CustomVisit(ref mat);
+                    field.SetValue(parent, mat);
+                    break;
+                default:
+                    DefaultVisit(ref value);
+                    field.SetValue(parent, value);
+                    break;
+            }
+        }
 
+        private static bool HandleIntFloat(FieldInfo field, ref object parent, object value)
+        {
+            switch (value)
+            {
                 case float2 f2:
                     CustomVisit(ref f2);
                     field.SetValue(parent, f2);
@@ -177,22 +207,10 @@ namespace ECSTools.ListViews.StructDrawer
                     CustomVisit(ref i4x4);
                     field.SetValue(parent, i4x4);
                     break;
-                case Enum e:
-                    CustomVisit(ref e);
-                    field.SetValue(parent, e);
-                    break;
-                case Mesh mesh:
-                    CustomVisit(ref mesh);
-                    field.SetValue(parent, value);
-                    break;
-                case Material mat:
-                    CustomVisit(ref mat);
-                    field.SetValue(parent, value);
-                    break;
                 default:
-                    DefaultVisit(ref value);
-                    break;
+                    return false;
             }
+            return true;
         }
         private static void HandlePrimitives(FieldInfo field, ref object parent, object value)
         {
@@ -264,6 +282,13 @@ namespace ECSTools.ListViews.StructDrawer
         private static int selectedEntity;
         private static int selectedEnum;
 
+        private static void CustomVisit<T>(ref T obj) where T : struct
+        {
+            
+        }
+
+        private static Dictionary<object, bool> nestedTypeFoldout = new Dictionary<object, bool>();
+
         private static void DefaultVisit(ref object obj)
         {
             if(obj == null)
@@ -271,9 +296,21 @@ namespace ECSTools.ListViews.StructDrawer
                 GUI.enabled = false;
                 GUILayout.Label("Object Null");
                 GUI.enabled = true;
+                return;
             }
-            else
-                GUILayout.Label($"{obj.GetType().Name}");
+            var type = obj.GetType();
+            if (!type.IsValueType || type.IsClass) return;
+            if(!nestedTypeFoldout.ContainsKey(obj))
+                nestedTypeFoldout.Add(obj, true);
+            EditorGUI.indentLevel++;
+            nestedTypeFoldout[obj] = EditorGUILayout.Foldout(nestedTypeFoldout[obj], type.Name);
+            if(!nestedTypeFoldout[obj])
+                return;
+            EditorGUI.indentLevel++;
+            foreach (var field in type.GetFields())
+                CheckType(field, ref obj, field.GetValue(obj));
+            EditorGUI.indentLevel--;
+            EditorGUI.indentLevel--;
         }
 
         private static void CustomVisit(ref Mesh obj)
