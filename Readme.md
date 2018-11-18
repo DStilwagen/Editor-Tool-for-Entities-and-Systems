@@ -1,16 +1,24 @@
-# Entity Component System Tools
+# Entity and System Tool
 
-A set of tools to be used with Unity's Entity Component System (ECS). Currently there is only one editor window with two pages, one for systems and one for entities. In the near future they will be moved into their own editor windows.
+This tool is to be used with Unity3D's Entity Component System (ECS). Currently there is only one editor window with two pages, one for systems and one for entities. In the near future they will be moved into their own editor windows.
 
 ## Systems Page
-Each world is listed with all the systems available in the current assembly. The system list is obtained using the same method that is used in default initialization.<sup>[Note 1](#n1)</sup> If a system exists for a world it is listed first and, systems that don't exist are listed after. Each can be updated, disposed, and recreated independently of each other.
+The systems page is split in a top and bottom panel. The top panel is a list of all systems available in the current assembly and the option to create a system into a selected world. The system list is obtained using the same method that is used in default initialization.<sup>[Note 1](#n1)</sup> The bottom panel is a list of each world and the systems for that world which can be updated, disposed.
 
 ### World
-World's do not currently have any functionality exposed in the UI.<sup>[Note 2](#n2)</sup>
-
-### System
-Each system has the following functions available in the UI.
+~~World's do not currently have any functionality exposed in the UI.<sup>[Note 2](#n2)</sup>~~  
+Fuctions now available for each world.
+* **Update All:** Updates all the systems for the associated world in the order they appear.
+* **Update Selected:** Updates selected systems for the associated world in the order they appear.
+* **Update PlayerLoop:** Update the PlayerLoop for the associated world.
+* **Dispose:** Dispose of the associated world.
+### System Functions
+Each system in the top panel has the following functions and options available.
+* **World Selector:** Allows you to select the world to create the system in.
 * **Create:** Creates the system in the world it is listed under.
+
+Each system in the bottom panel has the following functions and options available
+* **Enabled:** Away to quickly enable or disable a system.
 * **Update:** Calls `Update()` for the system in the world it is listed for. This does not bypass the internal checks used to determine if a system should run or not.
 * **Dispose:** Calls `Dispose()` for the system in the world it is listed for.
 
@@ -34,10 +42,9 @@ The entity used for these functions is the entity shown in the inspector or it d
 - **Destroy Entity** => Destroys the selected entity;
 - **Create Entity With Components** => Creates an entity with the selected components from the components panel.<sup>[Note 7](#n7)</sup>
 
-#### Notes:<br><sup>Limitations and plans for the future.</sup>
-
+#### **Notes:**<br><sup>Limitations and plans for the future.</sup>
 <a name="n1"><b>Note 1:</b></a> There is limited support for systems that have a generic type as part of the class definition. The class will only display if it is part of the player loop. They can still be updated and disposed, but not created from the editor window.<br/>
-<a name="n2"><b>Note 2:</b></a> An update all systems and dispose are currently planned for the near future.<br/>
+<a name="n2"><b>Note 2:</b></a> ~~An update all systems and dispose are currently planned for the near future.~~ Added Functions see [World](#World) section.<br/>
 <a name="n3"><b>Note 3:</b></a> Buffer Array Components are not supported yet.<br/>
 <a name="n4"><b>Note 4:</b></a> An option to change this maybe added later.<br/>
 <a name="n5"><b>Note 5:</b></a> The plan is to make this set uneeded and automatically update the component.<br/>
