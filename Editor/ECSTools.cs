@@ -13,7 +13,7 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using ComponentTypeListView = ECSTools.ListViews.ComponentTypeListView;
 using EntityListView = ECSTools.ListViews.EntityListView;
-using SystemListView = Unity.Entities.Editor.SystemListView;
+//using SystemListView = Unity.Entities.Editor.SystemListView;
 
 namespace ECSTools
 {
@@ -155,25 +155,22 @@ namespace ECSTools
             //EntityList.selectionChanged -= EntitySelectionChanged;
         }
 
-        void EntitySelectionChanged(Entity entity, World world, ComponentType type)
+        void EntitySelectionChanged(Entity entity, World _world, ComponentType type)
         {
             if (type.GetManagedType() == typeof(Entity))
             {
-                if (world.GetExistingManager<EntityManager>() != null)
-                    selectionEntityProxy.SetEntity(world, entity);
+                if (_world.EntityManager != null)
+                    selectionEntityProxy.SetEntity(_world, entity);
                 if (Selection.activeObject != selectionEntityProxy)
                     Selection.activeObject = selectionEntityProxy;
             }
             else
             {
-                var entityManager = world.GetExistingManager<EntityManager>();
-                if (entityManager != null)
-                    if (type.GetManagedType() != typeof(MonoBehaviour) ||
-                        type.GetManagedType() != typeof(ScriptableObject))
-                    {
-                        var obj = entityManager.GetComponentFromType(entity, type);
-                        ObjectSelectionChanged(type, ref obj);
-                    }
+                if (_world.EntityManager == null) return;
+                if (type.GetManagedType() == typeof(MonoBehaviour) &&
+                    type.GetManagedType() == typeof(ScriptableObject)) return;
+                var obj = _world.EntityManager.GetComponentFromType(entity, type);
+                ObjectSelectionChanged(type, ref obj);
             }
         }
 
@@ -185,7 +182,7 @@ namespace ECSTools
         {
             selectedComponentType       = type;
             selectedComponentTypeObject = objs;
-            ////Not yet full implemented. See the comment at the selectionObjectProxy declaration on line 53
+            ////Not yet fully implemented. See the comment at the selectionObjectProxy declaration on line 53
             //if (objs != null)
             //    selectionObjectProxy.SetObject(ref objs, type);
             //if (Selection.activeObject != selectionObjectProxy)
@@ -295,6 +292,12 @@ namespace ECSTools
                 return box;
             }
         }
+        
+        // Taken from the Entities package from the now internal class GUIHelpers
+        private static Rect GetExpandingRect()
+        {
+            return GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(true));
+        }
 
         private static GUIStyle box;
 
@@ -305,11 +308,11 @@ namespace ECSTools
             verticalSplitViewComponentEditorArea.BeginSplitView();
             horizontalSplitViewComponentEntitySplit.BeginSplitView();
 
-            componentTypeList.OnGUI(GUIHelpers.GetExpandingRect());
+            componentTypeList.OnGUI(GetExpandingRect());
       
             horizontalSplitViewComponentEntitySplit.Split();
 
-            entityList.OnGUI(GUIHelpers.GetExpandingRect());
+            entityList.OnGUI(GetExpandingRect());
             
             horizontalSplitViewComponentEntitySplit.EndSplitView();
             verticalSplitViewComponentEditorArea.Split();
@@ -328,9 +331,9 @@ namespace ECSTools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Add Component"))
             {
-                EntityManager em         = World.Active.GetExistingManager<EntityManager>();
-                var           selection  = componentTypeList.GetSelection();
-                var           objectList = componentTypeList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
+                EntityManager em = World.Active.EntityManager;
+                var selection = componentTypeList.GetSelection();
+                var objectList = componentTypeList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
 
                 //TODO: Finish Multi-Component Selection adding and setting
                 //var typeList = new List<ComponentType>();
@@ -352,13 +355,14 @@ namespace ECSTools
             }
             if (GUILayout.Button("Set Component"))
             {
-                EntityManager em         = World.Active.GetExistingManager<EntityManager>();
-                var           selection  = entityList.GetSelection();
-                var           objectList = entityList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
+                EntityManager em = World.Active.EntityManager;
+                var selection = entityList.GetSelection();
+                var objectList = entityList.GetRows().Where(a => selection.Contains(a.id)).ToArray();
 
                 if (objectList[0] is EntityElement entityElementSelected)
                     if (!em.HasComponent(selectionEntityProxy.Entity, selectedComponentType))
                         em.SetComponentWithType(entityElementSelected.Entity, selectedComponentType, obj);
+                    
                     //See the comments for selectedComponentType an ObjectSelectionChanged function
                     //if(!em.HasComponent(selectionEntityProxy.Entity, selectionObjectProxy.ComponentType))
                     //    em.SetComponentWithType(entityElementSelected.Entity, selectionObjectProxy.ComponentType, obj);
@@ -370,7 +374,7 @@ namespace ECSTools
             }
             if (GUILayout.Button("Remove Component"))
             {
-                EntityManager em        = World.Active.GetExistingManager<EntityManager>();
+                EntityManager em        = World.Active.EntityManager;
                 var           selection = componentTypeList.GetSelection();
                 var           typeList  = componentTypeList.GetRows().Where(a => selection.Contains(a.id));
 
@@ -383,13 +387,13 @@ namespace ECSTools
             {
                 if (selectionEntityProxy.Exists)
                 {
-                    var entityManager = World.GetExistingManager<EntityManager>();
+                    var entityManager = World.EntityManager;
                     entityManager.DestroyEntity(selectionEntityProxy.Entity);
                 }
             }
             if (GUILayout.Button("Create Entity With Components"))
             {
-                EntityManager em        = World.GetExistingManager<EntityManager>();
+                EntityManager em        = World.EntityManager;
                 var           selection = componentTypeList.GetSelection();
                 var           typeList  = componentTypeList.GetRows().Where(a => selection.Contains(a.id));
 
@@ -421,7 +425,7 @@ namespace ECSTools
                                                                 updatePlayerLoopChoice);
             
             //var rect = EditorGUILayout.BeginVertical();
-            systemCreateListView.OnGUI(GUIHelpers.GetExpandingRect());
+            systemCreateListView.OnGUI(GetExpandingRect());
 
             verticalSplitViewSystemsPage.Split();
             
@@ -429,7 +433,7 @@ namespace ECSTools
                 EditorGUILayout
                     .ToggleLeft(new GUIContent("Force a System to Update When Disabled", "If a system is disabled it will be turned on then update is called forcing the system to run"),
                             forceUpdateChoice);
-            worldListView.OnGUI(GUIHelpers.GetExpandingRect());
+            worldListView.OnGUI(GetExpandingRect());
             //EditorGUILayout.EndVertical();
             verticalSplitViewSystemsPage.EndSplitView();
         }

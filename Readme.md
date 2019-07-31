@@ -1,6 +1,8 @@
 # Entity and System Tool
-
-This tool is to be used with Unity3D's Entity Component System (ECS). Currently there is only one editor window with two pages, one for systems and one for entities. In the near future they will be moved into their own editor windows.
+A tool to be used with Unity3D's Entity Component System (ECS) or it's
+new name Data-Oriented Tech Stack (DOTS). Currently there is only one
+editor window with two pages, one for systems and one for entities. In
+the near future they will be moved into their own editor windows.
 
 ## Systems Page
 The systems page is split in a top and bottom panel. The top panel is a list of all systems available in the current assembly and the option to create a system into a selected world. The system list is obtained using the same method that is used in default initialization.<sup>[Note 1](#n1)</sup> The bottom panel is a list of each world and the systems for that world which can be updated, disposed.

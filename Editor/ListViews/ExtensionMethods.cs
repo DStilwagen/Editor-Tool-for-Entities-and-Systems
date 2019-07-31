@@ -25,16 +25,17 @@ namespace ECSTools.ListViews
                 MethodInfo methodInfo =
                     typeof(EntityManager).GetMethod("GetSharedComponentData", new[ ] { typeof(Entity) });
                 MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
-                var        parameters        = new object[ ] { entity };
+                var parameters = new object[ ] { entity };
                 componentData = genericMethodInfo.Invoke(EntityManager, parameters);
             }
             else if(type.GetManagedType() == typeof(Mesh) || type.GetManagedType() == typeof(Material))
             {
                 MethodInfo methodInfo =
-                    typeof(EntityManagerExtensions).GetMethod("GetComponentObject", new[] { typeof(EntityManager), typeof(Entity) });
+                    typeof(EntityManagerExtensions).GetMethod("GetComponentObject",
+                                                              new[ ] { typeof(EntityManager), typeof(Entity) });
                 MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
-                var        parameters        = new object[] { EntityManager, entity };
-                var        data              = genericMethodInfo.Invoke(EntityManager, parameters);
+                var parameters = new object[ ] { EntityManager, entity };
+                var data = genericMethodInfo.Invoke(EntityManager, parameters);
                 if (data != null)
                     componentData = data;
             }
@@ -46,36 +47,33 @@ namespace ECSTools.ListViews
                 Debug.Assert(type.IsZeroSized, "Zero-sized Components can not be set only added or removed");
             else if (type.GetManagedType().GetInterface("IComponentData") != null)
             {
-                MethodInfo methodInfo        = typeof(EntityManager).GetMethod("SetComponentData");
+                MethodInfo methodInfo = typeof(EntityManager).GetMethod("SetComponentData");
                 MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
-                var        parameters        = new object[ ] { entity, obj };
+                var parameters = new object[ ] { entity, obj };
                 if (genericMethodInfo.Invoke(entityManager, parameters) != null)
                     return true;
             }
             else if (type.GetManagedType().GetInterface("ISharedComponentData", true) != null)
             {
                 MethodInfo methodInfo =
-                    typeof(EntityManager).GetMethod("SetSharedComponentData", new[] { typeof(Entity) });
+                    typeof(EntityManager).GetMethod("SetSharedComponentData", new[ ] { typeof(Entity) });
                 MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
                 var        parameters        = new object[] { entity, obj };
                 if (genericMethodInfo.Invoke(entityManager, parameters) != null)
                     return true;
             }
-            //This is highly Experimental and is here only for completeness sake. This method is normally internal and not exposed
-            //else if(!type.GetManagedType().IsValueType)
-            //{
-            //    MethodInfo methodInfo =
-            //        typeof(EntityManager).GetMethod("SetComponentObject", 
-            //                                        BindingFlags.NonPublic | BindingFlags.Instance);//, 
-            //                                        //null, 
-            //                                        //new[ ] { typeof(Entity), typeof(ComponentType), typeof(object) },
-            //                                        //null);
-            //    //internal void SetComponentObject(Entity entity, ComponentType componentType, object componentObject)
-            //    MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
-            //    var        parameters        = new object[ ] { entity, type, obj };
-            //    if (genericMethodInfo.Invoke(EntityManager, parameters) != null)
-            //        return true;
-            //}
+            else if (!type.GetManagedType().IsValueType)
+            { 
+                MethodInfo methodInfo = typeof(EntityManager).GetMethod("GetComponentObject");
+                MethodInfo genericMethodInfo = methodInfo.MakeGenericMethod(type.GetManagedType());
+                var parameters = new object[] { entity };
+                var component = genericMethodInfo.Invoke(entityManager, parameters);
+                if ( component != null)
+                {
+                    component = obj;
+                    return true;
+                }
+            }
             return false;
         }
 
